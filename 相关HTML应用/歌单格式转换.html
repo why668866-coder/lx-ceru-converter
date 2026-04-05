@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>歌单转换器 · 洛雪 ⇄ 澜音</title>
+    <!-- CryptoJS AES 加解密 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <!-- JSZip 打包多歌单 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FileSaver.js 保存文件 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(145deg, #e9f5e9 0%, #c8e6c9 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #fffef7;
+            border-radius: 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2e7d32 0%, #689f38 100%);
+            color: white;
+            padding: 28px 32px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.4rem;
+            font-weight: 500;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+        .header p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+        .direction-tabs {
+            display: flex;
+            background: #f5f5f0;
+            border-bottom: 1px solid #e0e0d0;
+        }
+        .tab-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            padding: 14px 20px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #4a5b3e;
+            border-bottom: 3px solid transparent;
+        }
+        .tab-btn.active {
+            color: #2e7d32;
+            border-bottom-color: #2e7d32;
+            background: #ffffff;
+        }
+        .tab-btn:not(.active):hover {
+            background: #e9e9e0;
+        }
+        .content {
+            padding: 32px;
+        }
+        .upload-section {
+            background: #fefce8;
+            border: 2px dashed #9ccc65;
+            border-radius: 24px;
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+        .upload-section:hover {
+            background: #f9f7e1;
+            border-color: #689f38;
+            transform: translateY(-2px);
+        }
+        .upload-icon { font-size: 3.8rem; margin-bottom: 12px; }
+        .upload-text { font-size: 1.2rem; font-weight: 500; color: #3e5a2b; margin-bottom: 8px; }
+        .upload-subtext { color: #7d6e4a; font-size: 0.85rem; }
+        .file-input { display: none; }
+
+        .preview-section { display: none; margin-bottom: 30px; }
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: #f1f8e9;
+            padding: 12px 20px;
+            border-radius: 40px;
+        }
+        .preview-title { font-size: 1.3rem; font-weight: 600; color: #2c5a1e; }
+        .song-count { background: #c5e1a5; color: #2e4719; padding: 5px 15px; border-radius: 30px; font-size: 0.85rem; font-weight: 500; }
+        .preview-content {
+            background: #fef9e6;
+            border-radius: 24px;
+            padding: 20px;
+            max-height: 450px;
+            overflow-y: auto;
+        }
+        .playlist-group {
+            margin-bottom: 25px;
+            border-left: 5px solid #9ccc65;
+            padding-left: 18px;
+        }
+        .playlist-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #2e4a1f;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .playlist-badge {
+            background: #e7f5dc;
+            padding: 2px 12px;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-weight: normal;
+            color: #3a6522;
+        }
+        .song-item {
+            background: white;
+            border-radius: 16px;
+            padding: 10px 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            transition: 0.1s;
+        }
+        .song-number {
+            background: #c8e6c9;
+            color: #2e7d32;
+            width: 28px;
+            height: 28px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            font-size: 0.8rem;
+        }
+        .song-info { flex: 1; }
+        .song-name { font-weight: 600; color: #2c3e2b; }
+        .song-artist { font-size: 0.8rem; color: #7a6e4a; }
+
+        .options {
+            background: #faf7e4;
+            border-radius: 28px;
+            padding: 18px 24px;
+            margin-bottom: 25px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px;
+            align-items: center;
+        }
+        .option-item { display: flex; align-items: center; gap: 10px; }
+        .option-item label { font-weight: 500; color: #3b5526; cursor: pointer; }
+        select, input[type="checkbox"] {
+            padding: 6px 12px;
+            border-radius: 30px;
+            border: 1px solid #c5e0b4;
+            background: white;
+            cursor: pointer;
+        }
+        .controls { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+        .btn {
+            padding: 10px 26px;
+            border: none;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary { background: #2e7d32; color: white; box-shadow: 0 2px 5px rgba(46,125,50,0.2); }
+        .btn-primary:hover { background: #1b5e20; transform: translateY(-1px); }
+        .btn-secondary { background: #e7e7db; color: #4e5b3e; }
+        .btn-secondary:hover { background: #dad9c6; }
+        .result-section {
+            display: none;
+            background: #faf7e4;
+            border-radius: 28px;
+            padding: 32px;
+            text-align: center;
+        }
+        .result-icon { font-size: 4rem; margin-bottom: 12px; }
+        .result-success { color: #2e7d32; }
+        .result-error { color: #c62828; }
+        .result-message { font-size: 1.1rem; margin-bottom: 20px; color: #3c5430; }
+        .download-link {
+            background: #689f38;
+            color: white;
+            padding: 10px 28px;
+            border-radius: 40px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 8px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        .spinner {
+            border: 4px solid #e0e0d0;
+            border-top: 4px solid #689f38;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 0.9s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .error-details {
+            background: #ffefef;
+            border-left: 5px solid #c62828;
+            border-radius: 16px;
+            padding: 12px;
+            margin-top: 15px;
+            text-align: left;
+            font-size: 0.8rem;
+            font-family: monospace;
+            color: #b71c1c;
+            max-height: 180px;
+            overflow: auto;
+        }
+        @media (max-width: 680px) {
+            .content { padding: 20px; }
+            .controls { flex-direction: column; }
+            .btn { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🎼 歌单双向转换器</h1>
+        <p>洛雪音乐 ⇄ 澜音音乐 · 完美互转</p>
+    </div>
+    <div class="direction-tabs">
+        <button class="tab-btn active" id="tabLxToCeru">📤 洛雪 → 澜音</button>
+        <button class="tab-btn" id="tabCeruToLx">📥 澜音 → 洛雪</button>
+    </div>
+    <div class="content">
+        <!-- 公共上传区（根据tab改变提示） -->
+        <div class="upload-section" id="uploadSection">
+            <div class="upload-icon" id="uploadIcon">📂</div>
+            <div class="upload-text" id="uploadText">点击或拖拽文件到此处</div>
+            <div class="upload-subtext" id="uploadSubtext">支持 .json / .lxmc (洛雪) 或 .cmpl / .cpl (澜音)</div>
+            <input type="file" id="fileInput" class="file-input" accept=".json,.lxmc,.cmpl,.cpl" />
+        </div>
+
+        <!-- 预览区域（双向共用） -->
+        <div class="preview-section" id="previewSection">
+            <div class="preview-header">
+                <div class="preview-title" id="previewTitle">📋 歌单预览</div>
+                <div class="song-count" id="songCount">0 首歌曲</div>
+            </div>
+            <div class="preview-content" id="previewContent"></div>
+        </div>
+
+        <!-- 可选项：仅洛雪→澜音时显示 -->
+        <div class="options" id="optionsPanel" style="display: none;">
+            <div class="option-item">
+                <label>📦 合并所有歌单：</label>
+                <input type="checkbox" id="mergeCheckbox">
+                <span style="font-size:0.75rem; color:#7a6e4a;">(丢失歌单边界)</span>
+            </div>
+            <div class="option-item">
+                <label>🎛️ 输出格式：</label>
+                <select id="formatSelect">
+                    <option value="cmpl">.cmpl (推荐，压缩)</option>
+                    <option value="cpl">.cpl (旧版)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="controls" id="controls" style="display: none;">
+            <button class="btn btn-primary" id="actionBtn">
+                <span>✨</span> 开始转换
+            </button>
+            <button class="btn btn-secondary" id="resetBtn">
+                <span>🔄</span> 重新选择
+            </button>
+        </div>
+
+        <div class="loading" id="loadingSection">
+            <div class="spinner"></div>
+            <div>处理中，请稍候…</div>
+        </div>
+
+        <div class="result-section" id="resultSection">
+            <div class="result-icon" id="resultIcon"></div>
+            <div class="result-message" id="resultMessage"></div>
+            <a href="#" class="download-link" id="downloadLink" style="display: none">📥 下载文件</a>
+            <div class="error-details" id="errorDetails" style="display: none"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ======================== 常量 & 全局 ========================
+    const SECRET_KEY = 'CeruMusic-PlaylistSecretKey';
+    let currentDirection = 'lx2ceru';   // 'lx2ceru' or 'ceru2lx'
+    let currentData = null;              // 存储解析后的数据：lx2ceru时存储 { playlists: [{name,songs}] }, ceru2lx时存储 { songs: [] , sourceName }
+    let currentRawFile = null;
+    
+    // 切换tab
+    const tabLx = document.getElementById('tabLxToCeru');
+    const tabCeru = document.getElementById('tabCeruToLx');
+    const uploadIcon = document.getElementById('uploadIcon');
+    const uploadText = document.getElementById('uploadText');
+    const uploadSubtext = document.getElementById('uploadSubtext');
+    const optionsPanel = document.getElementById('optionsPanel');
+    const actionBtn = document.getElementById('actionBtn');
+    
+    function setDirection(dir) {
+        currentDirection = dir;
+        if (dir === 'lx2ceru') {
+            tabLx.classList.add('active');
+            tabCeru.classList.remove('active');
+            uploadIcon.innerText = '📁';
+            uploadText.innerText = '点击或拖拽洛雪歌单文件';
+            uploadSubtext.innerText = '支持 .json 或 .lxmc (gzip压缩)';
+            optionsPanel.style.display = 'flex';
+            actionBtn.innerHTML = '<span>🔐</span> 转换并加密 → 澜音';
+        } else {
+            tabCeru.classList.add('active');
+            tabLx.classList.remove('active');
+            uploadIcon.innerText = '🔒';
+            uploadText.innerText = '点击或拖拽澜音歌单文件';
+            uploadSubtext.innerText = '支持 .cmpl (压缩加密) 或 .cpl (纯加密)';
+            optionsPanel.style.display = 'none';
+            actionBtn.innerHTML = '<span>🔓</span> 解密并转换 → 洛雪';
+        }
+        resetConverter(); // 清空状态
+    }
+    tabLx.addEventListener('click', () => setDirection('lx2ceru'));
+    tabCeru.addEventListener('click', () => setDirection('ceru2lx'));
+    
+    // ======================== 核心工具函数 ========================
+    // 洛雪歌曲 → 澜音SongList
+    function lxSongToCeruSong(lxSong) {
+        const meta = lxSong.meta || {};
+        return {
+            songmid: meta.hash || meta.songId || lxSong.id || '',
+            singer: lxSong.singer || '未知艺术家',
+            name: lxSong.name || '未知歌曲',
+            albumName: meta.albumName || '未知专辑',
+            albumId: meta.albumId || '',
+            source: lxSong.source || 'unknown',
+            interval: lxSong.interval || '0:00',
+            img: meta.picUrl || '',
+            lrc: null,
+            types: meta.qualitys || null,
+            _types: meta._qualitys || null,
+            typeUrl: {},
+            url: ''
+        };
+    }
+    
+    // 澜音SongList → 洛雪歌曲 (符合洛雪 playListPart_v2)
+    function ceruSongToLxSong(ceruSong) {
+        const meta = {
+            songId: ceruSong.songmid || '',
+            albumName: ceruSong.albumName || '未知专辑',
+            albumId: ceruSong.albumId || '',
+            picUrl: ceruSong.img || '',
+        };
+        if (ceruSong.types) {
+            if (Array.isArray(ceruSong.types)) meta.qualitys = ceruSong.types;
+            else if (typeof ceruSong.types === 'object') {
+                meta.qualitys = Object.entries(ceruSong.types).map(([type, info]) => ({ type, size: info.size || '未知' }));
+            }
+        }
+        if (ceruSong._types && typeof ceruSong._types === 'object') meta._qualitys = ceruSong._types;
+        const source = ceruSong.source || 'unknown';
+        const songmid = ceruSong.songmid || '';
+        return {
+            id: `${source}_${songmid}`,
+            name: ceruSong.name,
+            singer: ceruSong.singer,
+            source: source,
+            interval: ceruSong.interval,
+            meta: meta
+        };
+    }
+    
+    // 从洛雪对象提取歌单列表 (支持 playListPart_v2 / playList_v2)
+    function extractLxPlaylists(lxObj) {
+        if (lxObj.type === 'playListPart_v2' && lxObj.data && Array.isArray(lxObj.data.list)) {
+            return [{ name: lxObj.data.name || lxObj.name || '默认歌单', songs: lxObj.data.list }];
+        }
+        if (lxObj.type === 'playList_v2' && Array.isArray(lxObj.data)) {
+            return lxObj.data.map(pl => ({ name: pl.name || '未命名歌单', songs: pl.list || [] })).filter(pl => pl.songs.length);
+        }
+        if (lxObj.list && Array.isArray(lxObj.list)) return [{ name: lxObj.name || '默认歌单', songs: lxObj.list }];
+        if (Array.isArray(lxObj)) return [{ name: '默认歌单', songs: lxObj }];
+        throw new Error('无法识别的洛雪歌单格式');
+    }
+    
+    // 洛雪文件读取 (支持 .json / .lxmc gzip)
+    async function readLxFile(file) {
+        const name = file.name.toLowerCase();
+        const buf = await file.arrayBuffer();
+        if (name.endsWith('.lxmc')) {
+            const decompressed = await decompressGzip(buf);
+            return JSON.parse(decompressed);
+        } else {
+            const text = new TextDecoder().decode(buf);
+            return JSON.parse(text);
+        }
+    }
+    
+    // gzip 压缩/解压 (浏览器原生)
+    async function compressGzip(str) {
+        const stream = new Blob([str]).stream();
+        const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+        return new Uint8Array(await new Response(compressedStream).arrayBuffer());
+    }
+    async function decompressGzip(arrayBuffer) {
+        const stream = new Response(arrayBuffer).body;
+        const decompressed = stream.pipeThrough(new DecompressionStream('gzip'));
+        const result = await new Response(decompressed).arrayBuffer();
+        return new TextDecoder().decode(result);
+    }
+    
+    // AES 加密/解密 (CryptoJS)
+    function encryptToCeru(songArray) {
+        const json = JSON.stringify(songArray);
+        return CryptoJS.AES.encrypt(json, SECRET_KEY).toString();
+    }
+    function decryptFromCeru(cipherText) {
+        const bytes = CryptoJS.AES.decrypt(cipherText, SECRET_KEY);
+        const dec = bytes.toString(CryptoJS.enc.Utf8);
+        if (!dec) throw new Error('解密失败，密码错误或文件损坏');
+        return JSON.parse(dec);
+    }
+    
+    // 生成澜音文件blob (根据format)
+    async function generateCeruBlob(songArray, format) {
+        const encrypted = encryptToCeru(songArray);
+        if (format === 'cmpl') {
+            const compressed = await compressGzip(encrypted);
+            return new Blob([compressed], { type: 'application/octet-stream' });
+        } else {
+            return new Blob([encrypted], { type: 'text/plain' });
+        }
+    }
+    
+    // 读取澜音文件 (.cmpl / .cpl) 返回解密后的 SongList[]
+    async function readCeruFile(file) {
+        const name = file.name.toLowerCase();
+        const buf = await file.arrayBuffer();
+        if (name.endsWith('.cmpl')) {
+            const decompressed = await decompressGzip(buf);
+            return decryptFromCeru(decompressed);
+        } else if (name.endsWith('.cpl')) {
+            const text = new TextDecoder().decode(buf);
+            return decryptFromCeru(text);
+        } else {
+            throw new Error('不支持的文件类型，请使用 .cmpl 或 .cpl');
+        }
+    }
+    
+    // 展示预览 (支持洛雪多歌单 或 澜音单歌单)
+    function renderPreview(playlists, isLxMode) {
+        const container = document.getElementById('previewContent');
+        container.innerHTML = '';
+        let totalSongs = 0;
+        for (let pl of playlists) {
+            totalSongs += pl.songs.length;
+            const group = document.createElement('div');
+            group.className = 'playlist-group';
+            group.innerHTML = `<div class="playlist-name"><span>🎵 ${escapeHtml(pl.name)}</span><span class="playlist-badge">${pl.songs.length} 首</span></div>`;
+            const songsDiv = document.createElement('div');
+            pl.songs.forEach((song, idx) => {
+                const item = document.createElement('div');
+                item.className = 'song-item';
+                item.innerHTML = `
+                    <div class="song-number">${idx+1}</div>
+                    <div class="song-info">
+                        <div class="song-name">${escapeHtml(song.name || '未知')}</div>
+                        <div class="song-artist">${escapeHtml(song.singer || '未知')} • ${song.interval || '0:00'}</div>
+                    </div>
+                `;
+                songsDiv.appendChild(item);
+            });
+            group.appendChild(songsDiv);
+            container.appendChild(group);
+        }
+        document.getElementById('songCount').innerText = `${totalSongs} 首歌 (${playlists.length}个歌单)`;
+        document.getElementById('previewSection').style.display = 'block';
+        document.getElementById('controls').style.display = 'flex';
+        document.getElementById('uploadSection').style.display = 'none';
+    }
+    
+    function escapeHtml(str) { return String(str).replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+    
+    // 文件上传处理 (根据当前方向)
+    async function handleFile(file) {
+        resetUIafterUpload();
+        try {
+            if (currentDirection === 'lx2ceru') {
+                const lxObj = await readLxFile(file);
+                const playlists = extractLxPlaylists(lxObj);
+                if (!playlists.length) throw new Error('未找到歌曲列表');
+                currentData = { playlists };
+                renderPreview(playlists, true);
+            } else {
+                const songArray = await readCeruFile(file);
+                if (!Array.isArray(songArray) || songArray.length === 0) throw new Error('澜音文件无效或为空');
+                // 转换为洛雪预览格式
+                const lxSongs = songArray.map(ceruSongToLxSong);
+                const playlists = [{ name: file.name.replace(/\.(cmpl|cpl)$/i, ''), songs: lxSongs }];
+                currentData = { playlists, originalSongArray: songArray };
+                renderPreview(playlists, false);
+            }
+        } catch (err) {
+            showError('文件解析失败: ' + err.message);
+            console.error(err);
+        }
+    }
+    
+    // 执行转换
+    async function executeConversion() {
+        if (!currentData) { showError('没有待转换的数据'); return; }
+        showLoading();
+        try {
+            if (currentDirection === 'lx2ceru') {
+                const merge = document.getElementById('mergeCheckbox').checked;
+                const format = document.getElementById('formatSelect').value;
+                const playlists = currentData.playlists;
+                if (merge || playlists.length === 1) {
+                    let allSongs = merge ? playlists.flatMap(p => p.songs) : playlists[0].songs;
+                    const ceruSongs = allSongs.map(lxSongToCeruSong);
+                    const blob = await generateCeruBlob(ceruSongs, format);
+                    const filename = `cerumusic-${new Date().toISOString().slice(0,10)}.${format}`;
+                    saveAs(blob, filename);
+                    showSuccess(`转换成功！${ceruSongs.length} 首歌曲`, filename);
+                } else {
+                    const zip = new JSZip();
+                    for (let pl of playlists) {
+                        const ceruSongs = pl.songs.map(lxSongToCeruSong);
+                        const blob = await generateCeruBlob(ceruSongs, format);
+                        let safeName = pl.name.replace(/[\\/:*?"<>|]/g, '_');
+                        if (!safeName) safeName = '未命名';
+                        zip.file(`${safeName}.${format}`, blob, { binary: true });
+                    }
+                    const zipBlob = await zip.generateAsync({ type: 'blob' });
+                    const zipName = `cerumusic-playlists-${new Date().toISOString().slice(0,10)}.zip`;
+                    saveAs(zipBlob, zipName);
+                    showSuccess(`转换完成！共 ${playlists.length} 个歌单，已打包为 ZIP`, zipName);
+                }
+            } else { // ceru2lx
+                const songArray = currentData.originalSongArray;
+                if (!songArray) throw new Error('内部错误：无原始澜音数据');
+                const lxSongs = songArray.map(ceruSongToLxSong);
+                const playlistName = currentData.playlists[0]?.name || '转换歌单';
+                const lxOutput = {
+                    type: 'playListPart_v2',
+                    data: {
+                        id: `import_${Date.now()}`,
+                        name: playlistName,
+                        list: lxSongs
+                    }
+                };
+                const jsonStr = JSON.stringify(lxOutput, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const filename = `${playlistName.replace(/[\\/:*?"<>|]/g, '_')}_lx.json`;
+                saveAs(blob, filename);
+                showSuccess(`解密成功！共 ${lxSongs.length} 首歌曲`, filename);
+            }
+        } catch (err) {
+            showError('转换失败: ' + err.message);
+            console.error(err);
+        }
+    }
+    
+    // UI 辅助
+    function resetUIafterUpload() {
+        document.getElementById('previewSection').style.display = 'none';
+        document.getElementById('resultSection').style.display = 'none';
+        document.getElementById('loadingSection').style.display = 'none';
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('uploadSection').style.display = 'block';
+    }
+    function resetConverter() {
+        currentData = null;
+        document.getElementById('uploadSection').style.display = 'block';
+        document.getElementById('previewSection').style.display = 'none';
+        document.getElementById('optionsPanel').style.display = (currentDirection === 'lx2ceru') ? 'flex' : 'none';
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('loadingSection').style.display = 'none';
+        document.getElementById('resultSection').style.display = 'none';
+        document.getElementById('fileInput').value = '';
+        document.getElementById('previewContent').innerHTML = '';
+        const oldManual = document.getElementById('manualReDownload');
+        if (oldManual) oldManual.remove();
+    }
+    function showLoading() {
+        document.getElementById('loadingSection').style.display = 'block';
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('resultSection').style.display = 'none';
+    }
+    function showSuccess(msg, filename) {
+        document.getElementById('loadingSection').style.display = 'none';
+        document.getElementById('resultSection').style.display = 'block';
+        document.getElementById('resultIcon').className = 'result-icon result-success';
+        document.getElementById('resultIcon').innerHTML = '✅';
+        document.getElementById('resultMessage').innerText = msg;
+        document.getElementById('downloadLink').style.display = 'none';
+        const old = document.getElementById('manualReDownload');
+        if (old) old.remove();
+        const btnDiv = document.createElement('div');
+        btnDiv.innerHTML = `<button class="btn btn-primary" id="manualReDownload" style="margin-top:12px;">📥 再次下载</button>`;
+        document.getElementById('resultSection').appendChild(btnDiv);
+        document.getElementById('manualReDownload').onclick = () => alert('文件已自动保存，若未开始请检查浏览器下载设置');
+        document.getElementById('errorDetails').style.display = 'none';
+    }
+    function showError(msg, detail=null) {
+        document.getElementById('loadingSection').style.display = 'none';
+        document.getElementById('resultSection').style.display = 'block';
+        document.getElementById('resultIcon').className = 'result-icon result-error';
+        document.getElementById('resultIcon').innerHTML = '❌';
+        document.getElementById('resultMessage').innerText = msg;
+        document.getElementById('downloadLink').style.display = 'none';
+        if (detail) {
+            const errDiv = document.getElementById('errorDetails');
+            errDiv.innerText = detail;
+            errDiv.style.display = 'block';
+        } else {
+            document.getElementById('errorDetails').style.display = 'none';
+        }
+        const old = document.getElementById('manualReDownload');
+        if (old) old.remove();
+    }
+    
+    // 绑定事件
+    const uploadSection = document.getElementById('uploadSection');
+    const fileInput = document.getElementById('fileInput');
+    uploadSection.addEventListener('click', () => fileInput.click());
+    uploadSection.addEventListener('dragover', (e) => { e.preventDefault(); uploadSection.style.borderColor = '#689f38'; });
+    uploadSection.addEventListener('dragleave', () => uploadSection.style.borderColor = '#9ccc65');
+    uploadSection.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        uploadSection.style.borderColor = '#9ccc65';
+        const files = e.dataTransfer.files;
+        if (files.length) await handleFile(files[0]);
+    });
+    fileInput.addEventListener('change', async (e) => { if (e.target.files.length) await handleFile(e.target.files[0]); });
+    document.getElementById('resetBtn').addEventListener('click', resetConverter);
+    actionBtn.addEventListener('click', executeConversion);
+    setDirection('lx2ceru'); // 默认
+</script>
+</body>
+</html>
